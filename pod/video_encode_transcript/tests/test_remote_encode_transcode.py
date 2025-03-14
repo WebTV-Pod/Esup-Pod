@@ -87,7 +87,7 @@ class RemoteEncodeTranscriptTestCase(TestCase):
         credit_videofile = credit_video.video.path
         credit_video_dir = os.path.join(os.path.dirname(credit_videofile), "%04d" % credit_video.id)
         os.makedirs(credit_video_dir, exist_ok=True)
-        with open(os.path.join(credit_videofile, "info_video.json"), "w") as f:
+        with open(os.path.join(credit_video_dir, "info_video.json"), "w") as f:
             json.dump({"list_audio_track": []}, f)
         print(" --->  SetUp of RemoteEncodeTranscriptTestCase: OK!")
 
