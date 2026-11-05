@@ -52,7 +52,7 @@ INSTALLED_APPS = [
     "src.apps.collection",
     "src.apps.completion",
     "src.apps.dressing",
-    "src.apps.live",
+    "src.apps.layout",
     "src.apps.migration",
     "src.apps.import_video",
 ]
@@ -61,6 +61,7 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -184,6 +185,7 @@ APPS_WITH_CUSTOM_SETTINGS = [
     "encoding",
     "collection",
     "completion",
+    "layout",
     "import_video",
 ]
 
