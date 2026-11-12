@@ -739,6 +739,18 @@
               },
               "pod_version_init": "5.0.0"
             },
+            "USE_CHAPTERS": {
+              "default_value": true,
+              "description": {
+                "en": [
+                  "Enable video chapters feature."
+                ],
+                "fr": [
+                  "Permet aux utilisateurs d'ajouter des chapitres sur une vidéo."
+                ]
+              },
+              "pod_version_init": "5.0.0"
+            },
             "USE_CUT": {
               "default_value": false,
               "description": {
