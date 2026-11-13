@@ -21,6 +21,7 @@ class Role(models.Model):
 
     class Meta:
         """Meta options for Role."""
+
         ordering = ["order", "label"]
         verbose_name = _("Role")
         verbose_name_plural = _("Roles")
