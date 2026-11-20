@@ -338,3 +338,16 @@ class VideoSerializer(serializers.ModelSerializer):
             for theme in themes_data:
                 ThemeItem.objects.create(theme=theme, video=video)
         return video
+
+    def validate_is_featured(self, value: bool) -> bool:
+        """Only staff members can change the featured flag."""
+        request = self.context.get("request")
+        is_staff = bool(request and request.user.is_staff)
+        instance = self.instance if isinstance(self.instance, Video) else None
+        current = instance.is_featured if instance else False
+
+        if value != current and not is_staff:
+            raise serializers.ValidationError(
+                _("Only staff members can feature a video.")
+            )
+        return value

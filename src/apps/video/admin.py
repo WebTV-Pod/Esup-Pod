@@ -73,9 +73,10 @@ class VideoAdmin(admin.ModelAdmin):
         "status",
         "encoding_status",
         "is_360",
+        "is_featured",
         "created_at",
     )
-    list_filter = ("status", "encoding_status", "is_360", "created_at", "sites")
+    list_filter = ("status", "encoding_status", "is_360", "created_at", "sites", "is_featured")
     filter_horizontal = ("sites", "disciplines", "restricted_groups", "co_owners")
     search_fields = ("title", "description", "owner__username", "owner__email", "slug")
     readonly_fields = (

@@ -56,6 +56,12 @@ class VideoFilterSet(django_filters.FilterSet):
         ),
     )
 
+    is_featured = django_filters.BooleanFilter(
+        field_name="is_featured",
+        label=_("Featured"),
+        help_text=_("Only featured videos (true) or non featured (false)."),
+    )
+
     # --- Classification ---
     type__slug = MultiValueCharFilter(
         field_name="type__slug",

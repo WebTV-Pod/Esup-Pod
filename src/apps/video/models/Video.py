@@ -137,6 +137,13 @@ class Video(models.Model):
         help_text=_("Check if this is a 360-degree immersive video."),
     )
 
+    is_featured = models.BooleanField(
+        _("Featured"),
+        default=False,
+        db_index=True,
+        help_text=_("Video highlighted by the editorial team."),
+    )
+
     # 4. OWNERSHIP & ACCESS
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
