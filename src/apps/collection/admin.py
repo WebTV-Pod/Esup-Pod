@@ -7,7 +7,15 @@ from django.contrib import admin
 from django.contrib.sites.shortcuts import get_current_site
 from django.utils.translation import gettext_lazy as _
 
-from .models import Channel, Favorite, Playlist, PlaylistItem, Theme, ThemeItem, FeaturedVideo
+from .models import (
+    Channel,
+    Favorite,
+    Playlist,
+    PlaylistItem,
+    Theme,
+    ThemeItem,
+    FeaturedVideo,
+)
 
 
 class ThemeItemInline(admin.TabularInline):
@@ -40,6 +48,7 @@ class ChannelAdmin(admin.ModelAdmin):
     filter_horizontal = ("collaborators",)
     raw_id_fields = ("owner",)
     readonly_fields = ("created_at", "updated_at")
+
 
 @admin.register(Theme)
 class ThemeAdmin(admin.ModelAdmin):
@@ -103,6 +112,7 @@ class FavoriteAdmin(admin.ModelAdmin):
     readonly_fields = ("added_at",)
     date_hierarchy = "added_at"
 
+
 class FeaturedVideoAdminForm(forms.ModelForm):
     """Admin form checking that the video belongs to the selected site."""
 
@@ -118,9 +128,7 @@ class FeaturedVideoAdminForm(forms.ModelForm):
         site = cleaned_data.get("site")
         video = cleaned_data.get("video")
         if site and video and not video.sites.filter(pk=site.pk).exists():
-            self.add_error(
-                "video", _("This video does not belong to the selected site.")
-            )
+            self.add_error("video", _("This video does not belong to the selected site."))
         return cleaned_data
 
 
