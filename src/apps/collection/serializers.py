@@ -3,12 +3,15 @@ Esup-Pod - Serializers for the distinct collection models.
 """
 
 from django.contrib.auth import get_user_model
+from django.contrib.sites.shortcuts import get_current_site
+from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from src.apps.collection.models import (
     Channel,
     Favorite,
+    FeaturedVideo,
     Playlist,
     PlaylistItem,
     Theme,
@@ -218,3 +221,70 @@ class FavoriteSerializer(serializers.ModelSerializer):
         model = Favorite
         fields = ["id", "user", "user_username", "video", "video_details", "added_at"]
         read_only_fields = ["user", "added_at"]
+
+
+class FeaturedVideoSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the FeaturedVideo model (editorial "coup de coeur").
+
+    The site is never provided by the client: it comes from the request and is
+    set by the viewset (``perform_create``). The video cannot be changed once
+    the entry is created.
+    """
+
+    video_details = VideoSerializer(source="video", read_only=True)
+    featured_by_username = serializers.CharField(
+        source="featured_by.username", read_only=True, allow_null=True
+    )
+
+    class Meta:
+        """FeaturedVideoSerializer metadata."""
+
+        model = FeaturedVideo
+        fields = [
+            "id",
+            "video",
+            "video_details",
+            "position",
+            "featured_by",
+            "featured_by_username",
+            "added_at",
+        ]
+        read_only_fields = ["featured_by", "added_at"]
+        # The (site, video) uniqueness is checked in validate() because the
+        # site is not a serializer field (it comes from the request).
+        validators = []
+
+    def validate(self, attrs):
+        """Check that the video belongs to the current site and is not featured yet."""
+        if self.instance is not None:
+            return attrs
+
+        video = attrs.get("video")
+        if video is None:
+            return attrs
+
+        site = get_current_site(self.context.get("request"))
+        if not video.sites.filter(pk=site.pk).exists():
+            raise serializers.ValidationError(
+                {"video": _("This video does not belong to the current site.")}
+            )
+        if FeaturedVideo.objects.filter(site=site, video=video).exists():
+            raise serializers.ValidationError(
+                {"video": _("This video is already featured on this site.")}
+            )
+        return attrs
+
+    def update(self, instance, validated_data):
+        """Update an entry without allowing it to be moved to another video."""
+        validated_data.pop("video", None)
+        return super().update(instance, validated_data)
+
+    def to_representation(self, instance):
+        """Hide the editor identity from users who cannot manage the selection."""
+        data = super().to_representation(instance)
+        user = getattr(self.context.get("request"), "user", None)
+        if not (user and user.has_perm("collection.change_featuredvideo")):
+            data.pop("featured_by", None)
+            data.pop("featured_by_username", None)
+        return data

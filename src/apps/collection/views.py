@@ -2,6 +2,7 @@
 Esup-Pod - Viewsets for distinct collection models.
 """
 
+from django.contrib.sites.shortcuts import get_current_site
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
@@ -13,12 +14,14 @@ from drf_spectacular.utils import (
 )
 from rest_framework import filters, permissions, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from src.apps.collection.filters import ChannelFilterSet, PlaylistFilterSet
 from src.apps.collection.models import (
     Channel,
     Favorite,
+    FeaturedVideo,
     Playlist,
     PlaylistItem,
     Theme,
@@ -31,6 +34,7 @@ from src.apps.collection.permissions import (
 from src.apps.collection.serializers import (
     ChannelSerializer,
     FavoriteSerializer,
+    FeaturedVideoSerializer,
     PlaylistSerializer,
     ThemeSerializer,
 )
@@ -419,3 +423,124 @@ class FavoriteViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """Set the current user upon favorite creation."""
         serializer.save(user=self.request.user)
+
+
+@extend_schema_view(
+    list=extend_schema(
+        summary="List featured videos",
+        description=(
+            'Retrieve the editorial selection ("coup de coeur") of the current '
+            "site, ordered by position. Visitors only see the featured videos they "
+            "are allowed to watch; editors see every entry."
+        ),
+    ),
+    retrieve=extend_schema(summary="Retrieve a featured video entry"),
+    create=extend_schema(
+        summary="Feature a video",
+        description=(
+            "Add a video to the selection of the current site. Requires the "
+            "`add_featuredvideo` permission. The position defaults to the end."
+        ),
+    ),
+    update=extend_schema(summary="Update a featured video entry"),
+    partial_update=extend_schema(summary="Partially update a featured video entry"),
+    destroy=extend_schema(summary="Remove a video from the selection"),
+)
+class FeaturedVideoViewSet(viewsets.ModelViewSet):
+    """
+    Editorial selection of videos ("coup de coeur") for the current site.
+
+    Read access is public (filtered by video visibility). Writing requires the
+    Django model permissions ``add_/change_/delete_featuredvideo``, which can be
+    granted to a group of editors.
+    """
+
+    serializer_class = FeaturedVideoSerializer
+    permission_classes = [permissions.DjangoModelPermissionsOrAnonReadOnly]
+
+    def get_queryset(self):
+        """Return the featured videos of the current site, filtered by visibility."""
+        site = get_current_site(self.request)
+        queryset = FeaturedVideo.objects.filter(site=site).select_related(
+            "video", "featured_by"
+        )
+        user = self.request.user
+        if user.has_perm("collection.change_featuredvideo"):
+            return queryset
+        visible_videos = Video.objects.visible_for(user).filter(sites=site)
+        return queryset.filter(video__in=visible_videos)
+
+    def perform_create(self, serializer):
+        """Attach the current site and the editor to the new entry."""
+        serializer.save(
+            site=get_current_site(self.request), featured_by=self.request.user
+        )
+
+    @extend_schema(
+        summary="Reorder the featured videos",
+        description=(
+            "Set the position of several entries at once. Requires the "
+            "`change_featuredvideo` permission."
+        ),
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "positions": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "integer"},
+                                "position": {"type": "integer"},
+                            },
+                        },
+                    }
+                },
+            }
+        },
+        responses={
+            200: OpenApiResponse(description="Entries reordered."),
+            400: OpenApiResponse(description="Invalid payload or unknown entry."),
+        },
+    )
+    @action(detail=False, methods=["post"])
+    def reorder(self, request):
+        """Reorder entries from a list of ``{"id": ..., "position": ...}`` objects."""
+        if not request.user.has_perm("collection.change_featuredvideo"):
+            raise PermissionDenied("You do not have permission to reorder.")
+
+        positions = request.data.get("positions")
+        if not isinstance(positions, list):
+            return Response(
+                {"positions": ["A list of {id, position} objects is expected."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        new_positions = {}
+        for entry in positions:
+            try:
+                entry_id = int(entry["id"])
+                position = int(entry["position"])
+            except (KeyError, TypeError, ValueError):
+                return Response(
+                    {"positions": ["Each item needs an integer id and position."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if position < 0:
+                return Response(
+                    {"positions": ["Positions must be positive."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            new_positions[entry_id] = position
+
+        items = list(self.get_queryset().filter(id__in=new_positions))
+        if len(items) != len(new_positions):
+            return Response(
+                {"positions": ["Unknown featured video id for this site."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        for item in items:
+            item.position = new_positions[item.id]
+        FeaturedVideo.objects.bulk_update(items, ["position"])
+        return Response({"status": "reordered"}, status=status.HTTP_200_OK)
