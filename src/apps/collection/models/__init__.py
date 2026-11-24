@@ -8,6 +8,7 @@ from .Channel import Channel
 from .Favorite import Favorite
 from .Playlist import Playlist, PlaylistItem
 from .Theme import Theme, ThemeItem
+from .Homepage import Homepage
 
 __all__ = [
     "BaseContainer",
@@ -17,4 +18,5 @@ __all__ = [
     "Playlist",
     "PlaylistItem",
     "Favorite",
+    "Homepage",
 ]

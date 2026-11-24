@@ -9,12 +9,14 @@ from rest_framework import serializers
 from src.apps.collection.models import (
     Channel,
     Favorite,
+    Homepage,
     Playlist,
     PlaylistItem,
     Theme,
     ThemeItem,
 )
 from src.apps.video.serializers import VideoSerializer
+from src.apps.video.models import Video
 
 User = get_user_model()
 
@@ -218,3 +220,26 @@ class FavoriteSerializer(serializers.ModelSerializer):
         model = Favorite
         fields = ["id", "user", "user_username", "video", "video_details", "added_at"]
         read_only_fields = ["user", "added_at"]
+
+
+class HomepageSerializer(serializers.ModelSerializer):
+    """Serializer for Homepage model."""
+
+    video = serializers.PrimaryKeyRelatedField(
+        queryset=Video.objects.filter(status=Video.Status.PUBLISHED)
+    )
+
+    class Meta:
+        """HomepageSerializer metadata."""
+
+        model = Homepage
+        fields = ["id", "video", "is_active"]
+        read_only_fields = ["id", "is_active"]
+
+    def validate_video(self, video):
+        """Prevent adding a video that is already selected for the homepage."""
+        if Homepage.objects.filter(video=video).exists():
+            raise serializers.ValidationError(
+                "This video is already selected for the homepage."
+            )
+        return video

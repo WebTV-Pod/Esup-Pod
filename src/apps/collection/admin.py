@@ -4,7 +4,16 @@ Esup-Pod - Admin configuration for the collection app.
 
 from django.contrib import admin
 
-from .models import Channel, Favorite, Playlist, PlaylistItem, Theme, ThemeItem
+from .models import (
+    Channel,
+    Favorite,
+    Homepage,
+    Playlist,
+    PlaylistItem,
+    Theme,
+    ThemeItem,
+)
+from src.apps.video.models import Video
 
 
 class ThemeItemInline(admin.TabularInline):
@@ -100,3 +109,17 @@ class FavoriteAdmin(admin.ModelAdmin):
     raw_id_fields = ("user", "video")
     readonly_fields = ("added_at",)
     date_hierarchy = "added_at"
+
+
+@admin.register(Homepage)
+class HomepageAdmin(admin.ModelAdmin):
+    """Admin configuration for homepage."""
+
+    list_display = ("video", "is_active")
+    list_filter = ("is_active",)
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        """Only offer published videos for homepage selection."""
+        if db_field.name == "video":
+            kwargs["queryset"] = Video.objects.filter(status=Video.Status.PUBLISHED)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)

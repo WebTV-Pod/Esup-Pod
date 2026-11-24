@@ -19,6 +19,7 @@ from src.apps.collection.filters import ChannelFilterSet, PlaylistFilterSet
 from src.apps.collection.models import (
     Channel,
     Favorite,
+    Homepage,
     Playlist,
     PlaylistItem,
     Theme,
@@ -31,6 +32,7 @@ from src.apps.collection.permissions import (
 from src.apps.collection.serializers import (
     ChannelSerializer,
     FavoriteSerializer,
+    HomepageSerializer,
     PlaylistSerializer,
     ThemeSerializer,
 )
@@ -419,3 +421,57 @@ class FavoriteViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """Set the current user upon favorite creation."""
         serializer.save(user=self.request.user)
+
+
+@extend_schema_view(
+    list=extend_schema(
+        summary="List homepage videos",
+        description="Returns the videos currently visible on the homepage.",
+    ),
+    retrieve=extend_schema(
+        summary="Retrieve a homepage entry",
+        description="Returns a specific homepage configuration.",
+    ),
+    create=extend_schema(
+        summary="Add a homepage video",
+        description="Adds a published video to the homepage.",
+    ),
+    update=extend_schema(
+        summary="Update a homepage entry",
+        description="Fully updates a homepage configuration.",
+    ),
+    partial_update=extend_schema(
+        summary="Partially update a homepage entry",
+        description="Updates one or more properties of a homepage configuration.",
+    ),
+    destroy=extend_schema(
+        summary="Remove a homepage video",
+        description="Permanently removes a video from the homepage.",
+    ),
+)
+class HomepageViewSet(viewsets.ModelViewSet):
+    """List homepage videos and let staff manage their homepage membership."""
+
+    serializer_class = HomepageSerializer
+
+    def get_permissions(self):
+        """Allow public reads and restrict homepage changes to staff."""
+        if self.action in ("create", "update", "partial_update", "destroy"):
+            return [permissions.IsAdminUser()]
+        return [permissions.AllowAny()]
+
+    def get_queryset(self):
+        """Return published entries for listing and all entries for staff removal."""
+        if self.action in ("retrieve", "update", "partial_update", "destroy"):
+            return Homepage.objects.all()
+
+        visible_videos = Video.objects.visible_for(self.request.user)
+        return (
+            Homepage.objects.filter(
+                is_active=True,
+                video__in=visible_videos,
+                video__status=Video.Status.PUBLISHED,
+            )
+            .select_related("video")
+            .order_by("id")
+        )
