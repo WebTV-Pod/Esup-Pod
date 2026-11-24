@@ -112,6 +112,34 @@ class VideoAccessTokenTests(APITestCase):
         )
         self.assertEqual(response.status_code, 404)
 
+    def test_resolve_valid_token_from_query_parameter(self):
+        """Resolving a valid token is supported on the base resolve route."""
+        token = VideoAccessToken.objects.create(video=self.video, created_by=self.owner)
+
+        response = self.client.get("/api/tokens/resolve/", {"token": str(token.token)})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["video_slug"], self.video.slug)
+
+    def test_resolve_valid_token_from_request_body(self):
+        """Resolving a valid token is supported via POST."""
+        token = VideoAccessToken.objects.create(video=self.video, created_by=self.owner)
+
+        response = self.client.post(
+            "/api/tokens/resolve/",
+            {"token": str(token.token)},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["video_slug"], self.video.slug)
+
+    def test_resolve_requires_token_on_base_route(self):
+        """The base resolve route rejects requests without a token."""
+        response = self.client.get("/api/tokens/resolve/")
+
+        self.assertEqual(response.status_code, 400)
+
     def test_resolve_revoked_token(self):
         """Resolving a revoked token returns 403."""
         token = VideoAccessToken.objects.create(

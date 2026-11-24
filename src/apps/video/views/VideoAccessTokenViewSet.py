@@ -2,6 +2,7 @@
 Esup-Pod - VideoAccessToken viewset.
 """
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, status, viewsets
@@ -60,20 +61,32 @@ class VideoAccessTokenViewSet(viewsets.ModelViewSet):
     )
     @action(
         detail=False,
-        methods=["get"],
+        methods=["get", "post"],
         url_path=r"resolve/(?P<token>[0-9a-f-]+)",
         permission_classes=[permissions.AllowAny],
     )
     def resolve(self, request, token=None):
         """
         GET /api/tokens/resolve/{token}/
+        GET /api/tokens/resolve/?token={token}
+        POST /api/tokens/resolve/ with {"token": "{token}"}
         Public endpoint — validates a token and returns video access info.
         """
+        token = token or request.query_params.get("token")
+        if not token and hasattr(request, "data"):
+            token = request.data.get("token")
+
+        if not token:
+            return Response(
+                {"detail": _("A token is required.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         try:
             access_token = VideoAccessToken.objects.select_related("video").get(
                 token=token
             )
-        except VideoAccessToken.DoesNotExist:
+        except (VideoAccessToken.DoesNotExist, DjangoValidationError, ValueError):
             return Response({"detail": _("Invalid token.")}, status=404)
 
         if not access_token.is_valid():

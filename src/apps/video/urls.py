@@ -3,6 +3,7 @@ Esup-Pod - Video application URL configuration.
 """
 
 from django.urls import path
+from rest_framework import permissions
 from rest_framework.routers import SimpleRouter
 
 from src.apps.video.conf import video_settings
@@ -55,6 +56,18 @@ if video_settings.use_stats_view:
     router.register(r"view-counts", ViewCountViewSet, basename="view-count")
 
 urlpatterns = router.urls
+
+if video_settings.use_video_access_token:
+    urlpatterns = [
+        path(
+            "tokens/resolve/",
+            VideoAccessTokenViewSet.as_view(
+                {"get": "resolve", "post": "resolve"},
+                permission_classes=[permissions.AllowAny],
+            ),
+            name="video-token-resolve",
+        ),
+    ] + urlpatterns
 
 if video_settings.use_duplicate:
     urlpatterns += [
