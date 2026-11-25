@@ -28,9 +28,9 @@ class VideoAccessTokenViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Returns only tokens created by the current user (optional ?video=<id>)."""
-        qs = VideoAccessToken.objects.filter(
-            created_by=self.request.user
-        ).select_related("video")
+        qs = VideoAccessToken.objects.filter(created_by=self.request.user).select_related(
+            "video"
+        )
         video_id = self.request.query_params.get("video")
         if video_id:
             if not video_id.isdigit():
