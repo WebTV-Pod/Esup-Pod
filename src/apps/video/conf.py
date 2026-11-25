@@ -198,6 +198,10 @@ class VideoConfig(BaseSettings):
         default="http://localhost:8000",
         description=_("Base URL of the site."),
     )
+    front_url: str = Field(
+        default="http://localhost:3000",
+        description=_("Base URL of the frontend (used to build share links)."),
+    )
 
     model_config = SettingsConfigDict(
         case_sensitive=False,

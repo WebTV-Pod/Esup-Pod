@@ -238,6 +238,10 @@ class VideoSerializer(serializers.ModelSerializer):
             return self._get_absolute_url(obj.video_file, request)
         if not obj.allow_downloading:
             return None
+        if obj.status == Video.Status.DRAFT:
+            # Draft videos are only reachable through a share token: never leak
+            # the raw media URL, the player must go through the stream endpoint.
+            return None
         if obj.status == Video.Status.RESTRICTED:
             if obj.password:
                 return None

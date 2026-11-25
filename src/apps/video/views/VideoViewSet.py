@@ -35,6 +35,10 @@ from src.apps.video.filters import VideoFilterSet
 from src.apps.video.models import Video, ViewCount
 from src.apps.video.permissions import IsOwnerOrCoOwnerOrChannelCollaborator
 from src.apps.video.serializers import DublinCoreSerializer, VideoSerializer
+from src.apps.video.services.access_tokens import (
+    has_valid_share_token,
+    share_token_video_ids,
+)
 from src.apps.video.services.duplicate import duplicate_video
 from src.apps.video.tasks import task_bulk_delete_videos, task_bulk_update_videos
 
@@ -125,9 +129,18 @@ class VideoViewSet(viewsets.ModelViewSet):
         ]:
             return qs
 
+        visible = Video.objects.visible_for(user)
+
+        # A valid share token unlocks its own video (draft, restricted, password...)
+        if getattr(self, "action", None) == "retrieve":
+            token_video_ids = share_token_video_ids(self.request)
+            if token_video_ids is not None:
+                visible = Video.objects.filter(
+                    Q(pk__in=visible.values("pk")) | Q(pk__in=token_video_ids)
+                )
+
         return (
-            Video.objects.visible_for(user)
-            .filter(id__in=qs)
+            visible.filter(id__in=qs)
             .prefetch_related(
                 "contributions__contributor",
                 "overlays",
@@ -258,6 +271,9 @@ class VideoViewSet(viewsets.ModelViewSet):
     def _check_stream_permissions(self, request, video):
         """Helper to check permissions for video streaming."""
         if self._is_owner_or_admin(request.user, video):
+            return
+
+        if has_valid_share_token(request, video):
             return
 
         if video.restricted_groups.exists():

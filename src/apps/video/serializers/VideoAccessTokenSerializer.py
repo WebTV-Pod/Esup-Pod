@@ -50,11 +50,9 @@ class VideoAccessTokenSerializer(serializers.ModelSerializer):
         return obj.is_valid()
 
     def get_token_url(self, obj):
-        """Builds the absolute URL for accessing the video via this token."""
-        request = self.context.get("request")
-        if request:
-            return request.build_absolute_uri(f"/video/token/{obj.token}/")
-        return f"/video/token/{obj.token}/"
+        """Builds the frontend URL for accessing the video via this token."""
+        front_url = video_settings.front_url.rstrip("/")
+        return f"{front_url}/video/{obj.video.slug}/?token={obj.token}"
 
     def validate_expires_at(self, value):
         """Ensures the expiry date is in the future and within max validity."""

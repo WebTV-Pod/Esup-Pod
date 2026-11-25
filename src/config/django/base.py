@@ -24,6 +24,7 @@ POD_VERSION = env("VERSION", default="5.0.0-DEV")
 POD_PROJECT_NAME = f"POD V{POD_VERSION.split('.')[0]}"
 SECRET_KEY = env("SECRET_KEY")
 SITE_URL = env("SITE_URL", default="http://localhost:8000")
+FRONT_URL = env("FRONT_URL", default="http://localhost:3000")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -203,6 +204,11 @@ def _load_settings_from_module(module_path):
 for app_config_name in APPS_WITH_CUSTOM_SETTINGS:
     _load_settings_from_module(f"src.config.defaults.{app_config_name}")
     _load_settings_from_module(f"src.config.settings.{app_config_name}")
+
+# Custom header sent by the frontend to access a video through a share token.
+from corsheaders.defaults import default_headers  # noqa: E402
+
+CORS_ALLOW_HEADERS = (*default_headers, "x-video-token")
 
 if not globals().get("CORS_ALLOWED_ORIGINS") and not globals().get(
     "CORS_ALLOW_ALL_ORIGINS"

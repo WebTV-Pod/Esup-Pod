@@ -223,3 +223,109 @@ class VideoAccessTokenTests(APITestCase):
         """Unauthenticated users cannot list tokens."""
         response = self.client.get("/api/tokens/")
         self.assertEqual(response.status_code, 401)
+
+
+class VideoAccessTokenAccessTests(APITestCase):
+    """Tests that a share token (X-Video-Token header) really unlocks its video."""
+
+    def setUp(self):
+        """Sets up a private draft video and a token."""
+        sync_metadata(sender=None)
+        self.original_use_token = video_settings.use_video_access_token
+        video_settings.use_video_access_token = True
+        reload_urlconf()
+
+        self.site = Site.objects.get_current()
+        self.owner = User.objects.create_user(
+            username="owner2", password="password"  # nosec
+        )
+        self.video = Video.objects.create(
+            title="Private Video", owner=self.owner, status=Video.Status.DRAFT
+        )
+        self.video.sites.add(self.site)
+        self.other_video = Video.objects.create(
+            title="Other Private Video", owner=self.owner, status=Video.Status.DRAFT
+        )
+        self.other_video.sites.add(self.site)
+        self.token = VideoAccessToken.objects.create(
+            video=self.video, created_by=self.owner
+        )
+
+    def tearDown(self):
+        """Restore original settings and reload URLs."""
+        video_settings.use_video_access_token = self.original_use_token
+        reload_urlconf()
+
+    def _get(self, video, token=None):
+        headers = {"HTTP_X_VIDEO_TOKEN": str(token)} if token else {}
+        return self.client.get(f"/api/videos/{video.slug}/", **headers)
+
+    def test_anonymous_cannot_see_draft_without_token(self):
+        """Without a token, an anonymous user cannot retrieve a draft video."""
+        self.assertEqual(self._get(self.video).status_code, 404)
+
+    def test_valid_token_unlocks_draft_video(self):
+        """A valid token lets an anonymous user retrieve the draft video."""
+        response = self._get(self.video, self.token.token)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["slug"], self.video.slug)
+
+    def test_token_does_not_expose_raw_video_url(self):
+        """The raw media URL is never returned for a draft video."""
+        response = self._get(self.video, self.token.token)
+        self.assertIsNone(response.data["video_url"])
+
+    def test_token_only_unlocks_its_own_video(self):
+        """A token for video A does not unlock video B."""
+        self.assertEqual(self._get(self.other_video, self.token.token).status_code, 404)
+
+    def test_revoked_token_does_not_unlock(self):
+        """A revoked token no longer grants access."""
+        self.token.is_active = False
+        self.token.save(update_fields=["is_active"])
+        self.assertEqual(self._get(self.video, self.token.token).status_code, 404)
+
+    def test_expired_token_does_not_unlock(self):
+        """An expired token no longer grants access."""
+        self.token.expires_at = timezone.now() - timedelta(minutes=1)
+        self.token.save(update_fields=["expires_at"])
+        self.assertEqual(self._get(self.video, self.token.token).status_code, 404)
+
+    def test_malformed_token_is_ignored(self):
+        """A malformed header value is ignored (no 500)."""
+        self.assertEqual(self._get(self.video, "not-a-uuid").status_code, 404)
+
+    def test_feature_disabled_ignores_token(self):
+        """When the feature is disabled, tokens grant nothing."""
+        video_settings.use_video_access_token = False
+        self.assertEqual(self._get(self.video, self.token.token).status_code, 404)
+
+    def test_valid_token_allows_stream_token_creation(self):
+        """A valid share token allows creating the ephemeral stream token."""
+        url = f"/api/videos/{self.video.slug}/create-stream-token/"
+        self.assertEqual(self.client.post(url).status_code, 403)
+        response = self.client.post(url, HTTP_X_VIDEO_TOKEN=str(self.token.token))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("stream_token", response.data)
+
+    def test_token_url_points_to_frontend(self):
+        """token_url is a frontend URL carrying the video slug and the token."""
+        self.client.force_authenticate(user=self.owner)
+        response = self.client.get(f"/api/tokens/?video={self.video.id}")
+        self.assertEqual(response.status_code, 200)
+        results = response.data.get("results", response.data)
+        self.assertEqual(len(results), 1)
+        expected = (
+            f"{video_settings.front_url.rstrip('/')}"
+            f"/video/{self.video.slug}/?token={self.token.token}"
+        )
+        self.assertEqual(results[0]["token_url"], expected)
+
+    def test_list_filtered_by_video(self):
+        """?video=<id> only returns tokens of that video."""
+        VideoAccessToken.objects.create(video=self.other_video, created_by=self.owner)
+        self.client.force_authenticate(user=self.owner)
+        response = self.client.get(f"/api/tokens/?video={self.other_video.id}")
+        results = response.data.get("results", response.data)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["video"], self.other_video.id)

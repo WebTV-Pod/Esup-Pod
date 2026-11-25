@@ -27,8 +27,16 @@ class VideoAccessTokenViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        """Returns only tokens created by the current user."""
-        return VideoAccessToken.objects.filter(created_by=self.request.user)
+        """Returns only tokens created by the current user (optional ?video=<id>)."""
+        qs = VideoAccessToken.objects.filter(
+            created_by=self.request.user
+        ).select_related("video")
+        video_id = self.request.query_params.get("video")
+        if video_id:
+            if not video_id.isdigit():
+                return qs.none()
+            qs = qs.filter(video_id=video_id)
+        return qs
 
     def perform_create(self, serializer):
         """Assigns the creator and validates ownership of the target video."""

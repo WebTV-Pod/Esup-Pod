@@ -6,8 +6,19 @@ import uuid
 
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+
+
+class VideoAccessTokenQuerySet(models.QuerySet):
+    """QuerySet helpers for VideoAccessToken."""
+
+    def valid(self):
+        """Returns only active, non-expired tokens (mirrors `is_valid()`)."""
+        return self.filter(is_active=True).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
+        )
 
 
 class VideoAccessToken(models.Model):
@@ -15,6 +26,8 @@ class VideoAccessToken(models.Model):
     A time-limited, revocable access token for sharing a video securely.
     Allows sharing videos (even password-protected ones) via a unique URL.
     """
+
+    objects = VideoAccessTokenQuerySet.as_manager()
 
     video = models.ForeignKey(
         "video.Video",
